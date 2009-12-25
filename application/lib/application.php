@@ -2,13 +2,13 @@
 
 class App {
   
-  public static function themePath($path) {
+  public static function ThemePath($path) {
     return APPROOT."/themes/".CURRENTTHEME."/$path";
   }
   
-  public static function themeTemplatePath($template) {
+  public static function ThemeTemplatePath($template) {
 //    if(strpos($template, '.php') < 1) $template .= ".php";
-    return self::themePath("views/$template.php");
+    return self::ThemePath("views/$template.php");
   }
   
 }

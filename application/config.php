@@ -37,6 +37,7 @@ $config['shortstack'] = array(
   ),
   'views' => array(
     'folder' => 'application/views',
+    'cache' => 'application/data/cache',
     'force_short_tags'=>false,
   ),
   'controllers' => array(

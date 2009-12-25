@@ -7,12 +7,12 @@ class BaseController extends Controller {
   }
   
   protected function renderTheme($view, $params=array(), $wrapInLayout=null) {
-    $tmpl_file = App::themeTemplatePath($view);
+    $tmpl_file = App::ThemeTemplatePath($view);
     $params = $this->defaultData($params);
     if(file_exists($tmpl_file))
       $tmpl = new Template( $tmpl_file );
     else
-      $tmpl = new Template( ShortStack::viewPath($view) );
+      $tmpl = new Template( ShortStack::ViewPath($view) );
     $content = $tmpl->fetch($params);
     $this->renderThemeText($content, $params, $wrapInLayout);
   }
@@ -20,12 +20,12 @@ class BaseController extends Controller {
   protected function renderThemeText($text, $params=array(), $wrapInLayout=null) {
     $layoutView = ($wrapInLayout == null) ? $this->defaultLayout : $wrapInLayout;
     if($layoutView !== false) {
-      $layout_file = App::themeTemplatePath($layoutView);
+      $layout_file = App::ThemeTemplatePath($layoutView);
       $params = $this->defaultData($params);
       if(file_exists($layout_file))
         $layout = new Template( $layout_file );
       else
-        $layout = new Template( ShortStack::viewPath($layoutView) );
+        $layout = new Template( ShortStack::ViewPath($layoutView) );
       $layout->contentForLayout = $text;
       $layout->display($params);
     } else {
@@ -43,14 +43,4 @@ class BaseController extends Controller {
     }
     return $params;
   }
-  
-  // private $modelHelper = false;
-  // function __get($key) {
-  //   if(!$this->modelHelper) {
-  //     use_helper('model');
-  //     $this->modelHelper = true;
-  //   }
-  //   // Need to see if $key is model-like??
-  //   return new ModelFinder($key);
-  // }
 }

@@ -1,6 +1,6 @@
 <?php
  
-// ShortStack v0.9.2
+// ShortStack v0.9.4
 // By M@ McCray
 // http://github.com/darthapo/ShortStack
 
@@ -23,17 +23,17 @@ class ShortStack {
   public static function AutoLoadFinder($className) {
     global $shortstack_config;
     if(strpos($className, 'ontroller') > 0) {
-      return self::controllerPath( underscore($className) );
+      return self::ControllerPath( underscore($className) );
     } else if(strpos($className, 'elper') > 0) {
-        return self::helperPath( underscore($className) );
+        return self::HelperPath( underscore($className) );
     } else { // Model
-      return self::modelPath( underscore($className) );
+      return self::ModelPath( underscore($className) );
     }    
   }
   // Loads all models in the models/ folder and returns the model class names
   public static function LoadAllModels() {
     global $shortstack_config;
-    $model_files = glob( self::modelPath("*") );
+    $model_files = glob( self::ModelPath("*") );
     $classNames = array();
     foreach($model_files as $filename) {
       $className = str_replace($shortstack_config['models']['folder']."/", "", $filename);
@@ -53,7 +53,7 @@ class ShortStack {
         $res = $mdl->_createTableForModel();
         $res->execute();
       
-      } else if($mdl instanceof DocumentModel) {
+      } else if($mdl instanceof Document) {
         $res = $mdl->_defineDocumentFromModel();
         $needDocInit = true;
       }
@@ -62,19 +62,19 @@ class ShortStack {
     return $modelnames;
   }
   // File paths...
-  public static function viewPath($path) {
-    return self::getPathFor('views', $path);
+  public static function ViewPath($path) {
+    return self::GetPathFor('views', $path);
   }
-  public static function controllerPath($path) {
-    return self::getPathFor('controllers', $path);
+  public static function ControllerPath($path) {
+    return self::GetPathFor('controllers', $path);
   }
-  public static function modelPath($path) {
-    return self::getPathFor('models', $path);
+  public static function ModelPath($path) {
+    return self::GetPathFor('models', $path);
   }
-  public static function helperPath($path) {
-    return self::getPathFor('helpers', $path);
+  public static function HelperPath($path) {
+    return self::GetPathFor('helpers', $path);
   }
-  protected static function getPathFor($type, $path) {
+  protected static function GetPathFor($type, $path) {
     global $shortstack_config;
     return $shortstack_config[$type]['folder']."/".$path.".php";
   }
@@ -116,7 +116,7 @@ function camelize($str) {
 
 function use_helper($helper) {
   if(! strpos($helper, 'elper') > 0) $helper .= "_helper";
-  require_once( ShortStack::helperPath($helper) );
+  require_once( ShortStack::HelperPath($helper) );
 }
 
 function getBaseUri() { // Used by the Dispatcher
@@ -139,9 +139,19 @@ function doc($doctype, $id=null) {// For use with documents
 
 function mdl($objtype, $id=null) {// For use with documents
   if($id != null) {
-    return Model::FindById($objtype, $id);
+    return Model::Get($objtype, $id);
   } else {
-    return new ModelFinder($doctype);
+    return Model::Find($doctype);
+  }
+}
+
+function get($modelName, $id=null) {
+  $c = new ReflectionClass($modelName);
+  if($c->isSubclassOf('Model')) {
+    return mdl($modelName, $id);
+  } else {
+    // Do another subclass test??
+    return doc($modelName, $id);
   }
 }
 
@@ -150,36 +160,31 @@ class Dispatcher {
   static public $dispatched = false;
   static public $current = null;
 
-  static public function recognize($override_controller=false) {
+  static public function Recognize($override_controller=false) {
     if(!defined('BASEURI')) {
-//      $base_uri = @ str_replace($_SERVER['PATH_INFO'], "/", array_shift(explode("?", $_SERVER['REQUEST_URI'])));
       $base_uri = @ getBaseUri();
       define("BASEURI", $base_uri);
     }
-    //echo "base uri = ". BASEURI;
     $uri = @  '/'.$_SERVER['QUERY_STRING']; //@ $_SERVER['PATH_INFO']; // was REQUEST_URI
     $path_segments = array_filter(explode('/', $uri), create_function('$var', 'return ($var != null && $var != "");'));
     $controller = array_shift($path_segments);
     // override is mainly only used for an 'install' controller... I'd imagine.
     if($override_controller != false) $controller = $override_controller;
     if($controller == '') {
-      $controller = 'home_controller';
+      $controller = 'home_controller'; // From settings instead?
     } else { 
       $controller = $controller.'_controller';
     }
-    return self::dispatch($controller, $path_segments);
+    return self::Dispatch($controller, $path_segments);
   }
   
-  static public function dispatch($controller_name, $route_data=array()) {
+  static public function Dispatch($controller_name, $route_data=array()) {
     if (!self::$dispatched) {
       $controller = self::getControllerClass($controller_name);
       self::$current = $controller;
       try {
         $ctrl = new $controller();
         $ctrl->execute($route_data);
-        // echo "CONTROLLER:<pre>$controller\n";
-        // print_r($route_data);
-        // echo "</pre>";
         self::$dispatched = true;
       }
       catch( NotFoundException $e ) {
@@ -189,7 +194,7 @@ class Dispatcher {
           $path_segments = array_filter(explode('/', $uri), create_function('$var', 'return ($var != null && $var != "");'));
           $hack_var = array_shift($path_segments); array_unshift($path_segments, $hack_var);
           $controller = self::getControllerClass( $notfound );
-          self::dispatch($controller, $path_segments);
+          self::Dispatch($controller, $path_segments);
         } else {
           echo "Not Found.";
         }
@@ -197,7 +202,7 @@ class Dispatcher {
       catch( Redirect $e ) {
         $route_data = explode('/', $e->getMessage());
         $controller = self::getControllerClass( array_shift($route_data) );
-        self::dispatch($controller, $route_data);
+        self::Dispatch($controller, $route_data);
       }
       catch( FullRedirect $e ) {
         $url = $e->getMessage();
@@ -213,6 +218,9 @@ class Dispatcher {
     return camelize( $controller );
   }  
 }
+class Cache {
+  // Coming soon...
+}
 class Controller {
   protected $defaultLayout = "_layout";
   
@@ -227,7 +235,7 @@ class Controller {
   }
   
   function render($view, $params=array(), $wrapInLayout=null) {
-    $tmpl = new Template( ShortStack::viewPath($view) );
+    $tmpl = new Template( ShortStack::ViewPath($view) );
     $content = $tmpl->fetch($params);
     $this->renderText($content, $params, $wrapInLayout);
   }
@@ -236,7 +244,7 @@ class Controller {
     $layoutView = ($wrapInLayout == null) ? $this->defaultLayout : $wrapInLayout;
     
     if($layoutView !== false) {
-      $layout = new Template( ShortStack::viewPath($layoutView) );
+      $layout = new Template( ShortStack::ViewPath($layoutView) );
       $layout->contentForLayout = $text;
       $layout->display($params);
     } else {
@@ -336,29 +344,31 @@ class Controller {
   }
   
 }
-class DB
-{
-  static protected $pdo; // Public for now...
+class DB {
   
-  static public function connect($conn, $user="", $pass="", $options=array()) {
+  // TODO: Change function names to TitleCase
+  
+  static protected $pdo;
+  
+  static public function Connect($conn, $user="", $pass="", $options=array()) {
     self::$pdo = new PDO($conn, $user, $pass, $options);
   }
   
-  static public function query($sql_string) {
+  static public function Query($sql_string) {
     return self::$pdo->query($sql_string);
   }
   
-  static public function getLastError() {
+  static public function GetLastError() {
     return self::$pdo->errorInfo();
   }
 
-  static public function fetchAll($sql_string) {
-    $statement = self::query($sql_string);
+  static public function FetchAll($sql_string) {
+    $statement = self::Query($sql_string);
     return $statement->fetchAll(); // PDO::FETCH_GROUP
   }
   
-  static public function ensureNotEmpty() {
-    $statement = self::query('SELECT name FROM sqlite_master WHERE type = \'table\'');
+  static public function EnsureNotEmpty() {
+    $statement = self::Query('SELECT name FROM sqlite_master WHERE type = \'table\'');
     $result = $statement->fetchAll();
         
     if( sizeof($result) == 0 ){
@@ -416,20 +426,20 @@ class CoreFinder implements IteratorAggregate {
     return $this;
   }
   
-  public function count() {
-    return count($this->fetch());
+  public function count($ignoreCache=false) {
+    return count($this->fetch($ignoreCache));
   }
   
-  public function get() {   // Returns the first match
+  public function get($ignoreCache=false) {   // Returns the first match
     $oldLimit = $this->limit;
     $this->limit = 1; // Waste not, want not.
-    $docs = $this->_execQuery();
+    $docs = $this->_execQuery($ignoreCache);
     $this->limit = $oldLimit;
     return @$docs[0];
   }
   
-  public function fetch() { // Executes current query
-    return $this->_execQuery();
+  public function fetch($ignoreCache=false) { // Executes current query
+    return $this->_execQuery($ignoreCache);
   }
   
   public function getIterator() { // For using the finder as an array in foreach() statements
@@ -463,10 +473,10 @@ class CoreFinder implements IteratorAggregate {
   }
   
   
-  protected function _execQuery() {
-    if($this->__cache != false) return $this->__cache;
+  protected function _execQuery($ignoreCache=false) {
+    if($ignoreCache == false && $this->__cache != false) return $this->__cache;
     $sql = $this->_buildSQL();
-    $stmt = DB::query($sql);
+    $stmt = DB::Query($sql);
     $items = array();
     if($stmt) {
       $results = $stmt->fetchAll();
@@ -609,7 +619,7 @@ class CoreModel {
       else if(array_key_exists('model', $def)) {
         $mdlClass = $def['model'];
         $fk = strtolower($mdlClass)."_id";
-        return Model::FindById($mdlClass, "id = ".$this->$fk);
+        return Model::Get($mdlClass, $this->$fk);
       } else {
         throw new Exception("A relationship has to be defined as a model or document");
       }
@@ -619,10 +629,11 @@ class CoreModel {
       foreach($values as $key=>$value) {
         $this->$key = $value;
       }
+      return $this;
     }
     
     public function update($values=array()) {
-      $this->updateValues($values);
+      return $this->updateValues($values);
     }
     
     public function hasChanged($key) {
@@ -660,6 +671,7 @@ class CoreModel {
         $fk = strtolower( get_class($modelOrName))."_id";
         $this->$fk = $modelOrName->id;
       }
+      return $this;
     }
     
     public function to_array($exclude=array()) {
@@ -707,6 +719,7 @@ class Model extends CoreModel {
     foreach($values as $key=>$value) {
       if(in_array($key, $valid_atts)) $this->$key = $value;
     }
+    return $this;
   }
   
   protected function getChangedValues() {
@@ -725,9 +738,9 @@ class Model extends CoreModel {
         $this->beforeCreate();
         $values = $this->getChangedValues();
         $sql = "INSERT INTO ".$this->modelName." (".join($this->changedFields, ', ').") VALUES (".join($values, ', ').");";
-        $statement = DB::query($sql);
+        $statement = DB::Query($sql);
         // Get the record's generated ID...
-        $result = DB::query('SELECT last_insert_rowid() as last_insert_rowid')->fetch();
+        $result = DB::Query('SELECT last_insert_rowid() as last_insert_rowid')->fetch();
         $this->data['id'] = $result['last_insert_rowid'];
         $this->afterCreate();
       } else {
@@ -738,20 +751,20 @@ class Model extends CoreModel {
           $fields[] = $field." = ".$value;
         }
         $sql = "UPDATE ".$this->modelName." SET ". join($fields, ", ") ." WHERE id = ". $this->id .";";
-        $statement = DB::query($sql);
+        $statement = DB::Query($sql);
       }
       $this->changedFields = array();
       $this->isDirty = false;
       $this->isNew = false;
       $this->afterSave();
     }
+    return $this;
   }
   
   // Warning: Like Han solo, this method doesn't fuck around, it will shoot first.
   public function destroy() {
     $this->beforeDestroy();
-    $sql = "DELETE FROM ".$this->modelName." WHERE id = ". $this->id .";";
-    $statement = DB::query($sql);
+    Model::Remove($this->modelName, $this->id);
     $this->afterDestroy();
     return $this;
   }
@@ -775,83 +788,39 @@ class Model extends CoreModel {
      $sql.= join($cols, ', ');
      $sql.= " );";
      
-     return DB::query( $sql );
+     return DB::Query( $sql );
    }
 
-   public function _count($whereClause=null, $sqlPostfix=null) {
-     return self::Count($this->modelName, $whereClause, $sqlPostfix);
+   public static function Get($modelName, $id) {
+     $sql = "SELECT * FROM ".$modelName." WHERE id = ". $id ." LIMIT 1;";
+     $results = DB::FetchAll($sql);
+     $mdls = array();
+     foreach ($results as $row) {
+       $mdls[] = new $modelName($row);
+     }
+     return @$mdls[0];
    }
-   static public function Count($className, $whereClause=null, $sqlPostfix=null) {
-     $sql = "SELECT count(id) as count FROM ".$className;
-     if($whereClause != null) $sql .= " WHERE ".$whereClause;
-     if($sqlPostfix != null)  $sql .= " ".$sqlPostfix;
-     $sql .= ';';
-     $statement = DB::query($sql);
+   
+   public static function Find($modelName) {
+     return new ModelFinder($modelName);
+   }
+
+   // Does NOT fire callbacks...
+   public static function Remove($modelName, $id) {
+     $sql = "DELETE FROM ".$modelName." WHERE id = ". $id .";";
+     DB::Query($sql);
+   }
+
+   static public function Count($className) {
+     $sql = "SELECT count(id) as count FROM ".$className.";";
+     $statement = DB::Query($sql);
      if($statement) {
        $results = $statement->fetchAll(); // PDO::FETCH_ASSOC ???
-       return (integer)$results[0]['count'];
+       return @(integer)$results[0]['count'];
      } else { // Throw an ERROR?
        return 0;
      }
    }
-
-   public function _query($whereClause=null, $sqlPostfix='', $selectClause='*') {
-     if(@ strpos(strtolower(' '.$sqlPostfix), 'order') < 1 && isset($this->defaultOrderBy)) {
-       $sqlPostfix .= " ORDER BY ".$this->defaultOrderBy;
-     }
-     return self::Query($this->modelName, $whereClause, $sqlPostfix, $selectClause);
-   }
-   static public function Query($className, $whereClause=null, $sqlPostfix='', $selectClause='*') {
-     $sql = "SELECT ". $selectClause ." FROM ".$className." ";
-     if($whereClause != null) {
-       $sql .= " WHERE ". $whereClause;
-     }
-     if(@ strpos(strtolower(' '.$sqlPostfix), 'order') < 1) {
-       // God I hate this... WILL BE REMOVED SOON!!!
-       $mdl = new $className();
-       if(isset($mdl->defaultOrderBy)) {
-         $sql .= " ORDER BY ".$mdl->defaultOrderBy." ";
-       }
-     }
-     if($sqlPostfix != '') {
-       $sql .= " ". $sqlPostfix;
-     }
-     $sql .= ';';
-     $statement = DB::query($sql);
-     if(!$statement) {
-       $errInfo = DB::getLastError();
-       throw new Exception("DB Error: ".$errInfo[2] ."\n". $sql);
-     }
-     return $statement->fetchAll(PDO::FETCH_ASSOC);
-   }
-
-   public function _find($whereClause=null, $sqlPostfix='', $selectClause='*') {
-     return self::Find($this->modelName, $whereClause, $sqlPostfix, $selectClause);
-   }
-   static public function Find($className, $whereClause=null, $sqlPostfix='', $selectClause='*') {
-     $results = self::Query($className, $whereClause, $sqlPostfix, $selectClause);
-     $models = array();
-     foreach($results as $row) {
-       $models[] = new $className($row);
-     }
-     return $models;
-   }
-
-   public function _findFirst($whereClause=null, $sqlPostfix='') {
-     return self::FindFirst($this->modelName, $whereClause, $sqlPostfix);
-   }
-   static public function FindFirst($className, $whereClause=null, $sqlPostfix='') {
-     $models = self::Find($className, $whereClause, $sqlPostfix." LIMIT 1");
-     return @ $models[0];
-   }
-
-   public function _findById($id) {
-     return self::FindById($this->modelName);
-   }
-   static public function FindById($className, $id) {
-     return self::FindFirst($className, "id = ".$id);
-   }
-  
 }
 
 
@@ -885,107 +854,7 @@ class ModelFinder extends CoreFinder {
   }
 
 } 
-class Document {
-  private static $_document_indexes_ = array();
-  
-  public static function Register($class) {
-    $doc = new $class();
-    $doc->_defineDocumentFromModel();
-  }
-  
-  public static function Define($name, $indexes=array(), $createClass=true) {
-    Document::$_document_indexes_[$name] = array_merge($indexes, array()); // a hokey way to clone an array
-    if($createClass)
-      eval("class ". $name ." extends DocumentModel {  }");
-  }
-  
-  public static function InitializeDatabase() {
-    // Loop through all the docs and create tables and index tables...
-    foreach( Document::$_document_indexes_ as $docType => $indexes) {
-      $tableSQL = "CREATE TABLE IF NOT EXISTS ". $docType ." ( id INTEGER PRIMARY KEY, data TEXT, created_on TIMESTAMP, updated_on TIMESTAMP );";
-      DB::query( $tableSQL );
-      foreach ($indexes as $field=>$fType) {
-        $indexSQL = "CREATE TABLE IF NOT EXISTS ". $docType ."_". $field ."_idx ( id INTEGER PRIMARY KEY, docid INTEGER, ". $field ." ". $fType ." );";
-        DB::query( $indexSQL );
-      }
-    }
-  }
-  
-  public static function Reindex($doctype=null, $id=null) {
-    // Loop through all the records, deserialize the data column and recreate the index rows
-    $docs = array();
-    // Step one: Fetch all the documents to update...
-    if($doctype != null) {
-      if(!array_key_exists($doctype, Document::$_document_indexes_)) {
-        $tmp = new $doctype();
-        $tmp->_defineDocumentFromModel();
-      }
-      if($id != null) {
-        $sql = "SELECT * FROM ".$doctype." WHERE id = ". $id .";";
-      } else {
-        $sql = "SELECT * FROM ".$doctype.";";
-      }
-      $results = DB::fetchAll($sql);
-      foreach ($results as $row) {
-        $docs[] = new $doctype($row);
-      }
-    } else {
-      // Do 'em all!
-      foreach( Document::$_document_indexes_ as $docType => $indexes) {
-        $sql = "SELECT * FROM ".$doctype."";
-        $results = DB::fetchAll($sql);
-        foreach ($results as $row) {
-          $docs[] = new $doctype($row);
-        }
-      }
-    }
-    // Step two: Loop through them and delete, then rebuild index rows
-    foreach ($docs as $doc) {
-      $indexes = Document::GetIndexesFor($doc->modelName);
-      if(count($indexes) > 0) {
-        foreach ($indexes as $field=>$fType) {
-          // TODO: Optimize as single transactions?
-          $indexTable = $doc->modelName ."_". $field ."_idx";
-          $sql = "DELETE FROM ". $indexTable ." WHERE docid = ". $doc->id .";";
-          $results = DB::query($sql);
-          $sql = "INSERT INTO ". $indexTable ." ( docid, ". $field ." ) VALUES (".$doc->id.', "'.htmlentities($doc->{$field}, ENT_QUOTES).'" );';
-          $results = DB::query($sql);
-        }
-      } else {
-        echo "! No indexes for ". $doc->modelName ."\n";
-      }
-    }
-  }
-  
-  public static function Get($doctype, $id) {
-    $sql = "SELECT * FROM ".$doctype." WHERE id = ". $id .";";
-    $results = DB::fetchAll($sql);
-    $docs = array();
-    foreach ($results as $row) {
-      $docs[] = new $doctype($row);
-    }
-    return @$docs[0];
-  }
- 
-  public static function Find($doctype) {
-    return new DocumentFinder($doctype);
-  }
-  
-  public static function Destroy($doctype, $id) {
-    $sql = "DELETE FROM ".$doctype." WHERE id = ". $id .";";
-    DB::query($sql);
-    foreach ( Document::GetIndexesFor($doctype) as $field=>$fType) {
-      $sql = "DELETE FROM ".$doctype."_".$field."_idx WHERE docid = ". $id .";";
-      DB::query($sql);
-    }
-  }
-
-  public static function GetIndexesFor($doctype) {
-    return Document::$_document_indexes_[$doctype];
-  }
-}
-
-class DocumentModel extends CoreModel {
+class Document extends CoreModel {
 
   public $id = null;
   protected $rawData = null;
@@ -1026,20 +895,20 @@ class DocumentModel extends CoreModel {
 
   public function save() {
     if($this->isDirty) {
-      $this->beforeSave(); // Cannot cancel events... yet.
+      $this->beforeSave();
       if($this->isNew) { // Insert
-        $this->beforeCreate(); // Cannot cancel events... yet.
+        $this->beforeCreate();
         $this->_serialize();
         $sql = 'INSERT INTO '.$this->modelName.' ( data ) VALUES ( "'. $this->rawData .'" );';
-        $statement = DB::query($sql);
-        $result = DB::query('SELECT last_insert_rowid() as last_insert_rowid')->fetch(); // Get the record's generated ID...
+        $statement = DB::Query($sql);
+        $result = DB::Query('SELECT last_insert_rowid() as last_insert_rowid')->fetch(); // Get the record's generated ID...
         $this->id = $result['last_insert_rowid'];
         Document::Reindex($this->modelName, $this->id);
-        $this->afterCreate(); // Cannot cancel events... yet.
+        $this->afterCreate();
       } else { // Update
-        $this->serialize();
+        $this->_serialize();
         $sql = "UPDATE ".$this->modelName.' SET data="'.htmlentities( json_encode($this->data), ENT_QUOTES).'" WHERE id = '. $this->id .';';
-        $statement = DB::query($sql);
+        $statement = DB::Query($sql);
         $index_changed = array_intersect($this->changedFields, array_keys(Document::GetIndexesFor($this->modelName)));
         if(count($index_changed) > 0)  // Only if an indexed field has changed
           Document::Reindex($this->modelName, $this->id);
@@ -1047,16 +916,16 @@ class DocumentModel extends CoreModel {
       $this->changedFields = array();
       $this->isDirty = false;
       $this->isNew = false;
-      $this->afterSave(); // Cannot cancel events... yet.
+      $this->afterSave();
     }
     return $this;
   }
 
   // Warning: Like Han solo, this method doesn't fuck around, it will shoot first.
   public function destroy() {
-    $this->beforeDestroy(); // Cannot cancel events... yet.
-    Document::Destroy($this->modelName, $this->id);
-    $this->afterDestroy(); // Cannot cancel events... yet.
+    $this->beforeDestroy();
+    Document::Remove($this->modelName, $this->id);
+    $this->afterDestroy();
     return $this;
   }
   
@@ -1098,6 +967,119 @@ class DocumentModel extends CoreModel {
     }
     return $attrs;
   }
+  
+  // Static Methods
+  
+  private static $_document_indexes_ = array();
+  
+  public static function Register($class) {
+    $doc = new $class();
+    $doc->_defineDocumentFromModel();
+  }
+  
+  public static function Define($name, $indexes=array(), $createClass=true) {
+    Document::$_document_indexes_[$name] = array_merge($indexes, array()); // a hokey way to clone an array
+    if($createClass)
+      eval("class ". $name ." extends Document {  }");
+  }
+  
+  public static function InitializeDatabase() {
+    // Loop through all the docs and create tables and index tables...
+    foreach( Document::$_document_indexes_ as $docType => $indexes) {
+      $tableSQL = "CREATE TABLE IF NOT EXISTS ". $docType ." ( id INTEGER PRIMARY KEY, data TEXT, created_on TIMESTAMP, updated_on TIMESTAMP );";
+      DB::Query( $tableSQL );
+      foreach ($indexes as $field=>$fType) {
+        $indexSQL = "CREATE TABLE IF NOT EXISTS ". $docType ."_". $field ."_idx ( id INTEGER PRIMARY KEY, docid INTEGER, ". $field ." ". $fType ." );";
+        DB::Query( $indexSQL );
+      }
+    }
+  }
+  
+  public static function Reindex($doctype=null, $id=null) {
+    // Loop through all the records, deserialize the data column and recreate the index rows
+    $docs = array();
+    // Step one: Fetch all the documents to update...
+    if($doctype != null) {
+      if(!array_key_exists($doctype, Document::$_document_indexes_)) {
+        $tmp = new $doctype();
+        $tmp->_defineDocumentFromModel();
+      }
+      if($id != null) {
+        $sql = "SELECT * FROM ".$doctype." WHERE id = ". $id .";";
+      } else {
+        $sql = "SELECT * FROM ".$doctype.";";
+      }
+      $results = DB::FetchAll($sql);
+      foreach ($results as $row) {
+        $docs[] = new $doctype($row);
+      }
+    } else {
+      // Do 'em all!
+      foreach( Document::$_document_indexes_ as $docType => $indexes) {
+        $sql = "SELECT * FROM ".$doctype."";
+        $results = DB::FetchAll($sql);
+        foreach ($results as $row) {
+          $docs[] = new $doctype($row);
+        }
+      }
+    }
+    // Step two: Loop through them and delete, then rebuild index rows
+    foreach ($docs as $doc) {
+      $indexes = Document::GetIndexesFor($doc->modelName);
+      if(count($indexes) > 0) {
+        foreach ($indexes as $field=>$fType) {
+          // TODO: Optimize as single transactions?
+          $indexTable = $doc->modelName ."_". $field ."_idx";
+          $sql = "DELETE FROM ". $indexTable ." WHERE docid = ". $doc->id .";";
+          $results = DB::Query($sql);
+          $sql = "INSERT INTO ". $indexTable ." ( docid, ". $field ." ) VALUES (".$doc->id.', "'.htmlentities($doc->{$field}, ENT_QUOTES).'" );';
+          $results = DB::Query($sql);
+        }
+      } else {
+        echo "! No indexes for ". $doc->modelName ."\n";
+      }
+    }
+  }
+  
+  public static function Get($doctype, $id) {
+    $sql = "SELECT * FROM ".$doctype." WHERE id = ". $id ." LIMIT 1;";
+    $results = DB::FetchAll($sql);
+    $docs = array();
+    foreach ($results as $row) {
+      $docs[] = new $doctype($row);
+    }
+    return @$docs[0];
+  }
+ 
+  public static function Find($doctype) {
+    return new DocumentFinder($doctype);
+  }
+  
+  // Doesn't fire callbacks!
+  public static function Remove($doctype, $id) {
+    $sql = "DELETE FROM ".$doctype." WHERE id = ". $id .";";
+    DB::Query($sql);
+    foreach ( Document::GetIndexesFor($doctype) as $field=>$fType) {
+      $sql = "DELETE FROM ".$doctype."_".$field."_idx WHERE docid = ". $id .";";
+      DB::Query($sql);
+    }
+  }
+  
+  public static function Count($doctype) {
+    $sql = "SELECT count(id) as count FROM ".$doctype.";";
+    $statement = DB::Query($sql);
+    if($statement) {
+      $results = $statement->fetchAll(); // PDO::FETCH_ASSOC ???
+      return @(integer)$results[0]['count'];
+    } else { // Throw an ERROR?
+      return 0;
+    }
+  }
+
+  public static function GetIndexesFor($doctype) {
+    return Document::$_document_indexes_[$doctype];
+  }
+  
 }
 
 
@@ -1159,7 +1141,7 @@ class DocumentFinder extends CoreFinder {
       $col .= ".". $column;
     }
     return $col; 
-  }
+  }  
 }
 
 class Template {
@@ -1177,6 +1159,7 @@ class Template {
   function __set($key, $value) {
     $this->context[$key] = $value;
   }
+  
   function __get($key) {
     if(array_key_exists($key, $this->context)) {
       return $this->context[$key];
@@ -1231,6 +1214,7 @@ if(!isset($shortstack_config)) {
     ),
     'views' => array(
       'folder' => 'views',
+      'cache' => 'caches',
       'force_short_tags'=>false,
     ),
     'controllers' => array(
@@ -1248,14 +1232,14 @@ if( isset($shortstack_config) ) {
   define('FORCESHORTTAGS', @$shortstack_config['views']['force_short_tags']);
   if(@ is_array($shortstack_config['helpers']['autoload']) ) {
     foreach($shortstack_config['helpers']['autoload'] as $helper) {
-      require_once( ShortStack::helperPath($helper."_helper"));
+      require_once( ShortStack::HelperPath($helper."_helper"));
     }
   }
   if(@ $shortstack_config['db']['autoconnect'] ) {
-    DB::connect( $shortstack_config['db']['engine'].":".$shortstack_config['db']['database'] ); 
+    DB::Connect( $shortstack_config['db']['engine'].":".$shortstack_config['db']['database'] ); 
   }
   if(@ $shortstack_config['db']['verify'] ) {
-    DB::ensureNotEmpty();
+    DB::EnsureNotEmpty();
   }
 } else {
   throw new NotFoundException("ShortStack configuration missing!");

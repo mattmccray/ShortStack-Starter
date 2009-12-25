@@ -18,10 +18,10 @@ try {
 } catch (EmptyDbException $e) {
   $uri = (@$_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : "";
   if(strpos($uri, 'install') < 1 ) {
-    Dispatcher::recognize('install');
+    Dispatcher::Recognize('install');
   }
 }
  
 if(! Dispatcher::$dispatched ) {
-  Dispatcher::recognize();
+  Dispatcher::Recognize();
 }
