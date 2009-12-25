@@ -1,6 +1,6 @@
 <?php
  
-// ShortStack v0.9.4
+// ShortStack v0.9.5
 // By M@ McCray
 // http://github.com/darthapo/ShortStack
 
@@ -73,6 +73,9 @@ class ShortStack {
   }
   public static function HelperPath($path) {
     return self::GetPathFor('helpers', $path);
+  }
+  public static function CachePath($path) {
+    return self::GetPathFor('cacheing', $path);
   }
   protected static function GetPathFor($type, $path) {
     global $shortstack_config;
@@ -171,7 +174,9 @@ class Dispatcher {
     // override is mainly only used for an 'install' controller... I'd imagine.
     if($override_controller != false) $controller = $override_controller;
     if($controller == '') {
-      $controller = 'home_controller'; // From settings instead?
+      global $shortstack_config;
+      $controller = @$shortstack_config['controllers']['index']; // From settings instead?
+      if(!$controller) $controller = 'home_controller'; // ?
     } else { 
       $controller = $controller.'_controller';
     }
@@ -183,6 +188,7 @@ class Dispatcher {
       $controller = self::getControllerClass($controller_name);
       self::$current = $controller;
       try {
+        if(!Controller::IsAllowed($controller_name)) throw new NotFoundException();
         $ctrl = new $controller();
         $ctrl->execute($route_data);
         self::$dispatched = true;
@@ -219,14 +225,43 @@ class Dispatcher {
   }  
 }
 class Cache {
-  // Coming soon...
+  
+  public static function Exists($name) {
+    if(!USECACHE || DEBUG) return false;
+    else return file_exists( ShortStack::CachePath($name) );
+  }
+
+  public static function Get($name) {
+    return file_get_contents( ShortStack::CachePath($name) );
+  }
+
+  public static function Save($name, $content) {
+    return file_put_contents( ShortStack::CachePath($name), $content);
+  }
+
+  public static function Remove($name) {
+    return @ unlink ( ShortStack::CachePath($name) );
+  }
+
+  public static function Clear() {
+    $cache_files = glob( ShortStack::CachePath("*") );
+    foreach($cache_files as $filename) {
+      @unlink ( $filename );
+    }
+    return true;
+  }
+
 }
 class Controller {
   protected $defaultLayout = "_layout";
+  protected $cacheName = false;
+  protected $cacheOutput = true;
   
   // Default execute method... Feel free to override.
   function execute($args=array()) {
+    $this->cacheName = get_class($this)."-".join('_', $args);
     if(@ $this->secure) $this->ensureLoggedIn();
+    $this->_preferCached();
     $this->dispatchAction($args);
   }
   
@@ -242,14 +277,16 @@ class Controller {
   
   function renderText($text, $params=array(), $wrapInLayout=null) {
     $layoutView = ($wrapInLayout == null) ? $this->defaultLayout : $wrapInLayout;
-    
+    $output = '';
     if($layoutView !== false) {
       $layout = new Template( ShortStack::ViewPath($layoutView) );
       $layout->contentForLayout = $text;
-      $layout->display($params);
+      $output = $layout->fetch($params);
     } else {
-      echo $text;
+      $output = $text;
     }
+    $this->_cacheContent($output);
+    echo $output;
   }
   
   // TODO: ???Should this even be here???
@@ -278,6 +315,22 @@ class Controller {
       }
   }
 
+  protected function _preferCached($name=null) {
+    if($this->cacheOutput) {
+      $cname = ($name == null) ? $this->cacheName : $name;
+      if(Cache::Exists($cname)) {
+        echo Cache::Get($cname);
+        exit(0);
+      }
+    }
+  }
+  
+  protected function _cacheContent($content, $name=null) {
+    if($this->cacheOutput) {
+      $cname = ($name == null) ? $this->cacheName : $name;
+      Cache::Save($cname, $content);
+    }
+  }
   
   protected function ensureLoggedIn($useHTTP=false) {
     if (!$this->isLoggedIn()) {
@@ -342,7 +395,19 @@ class Controller {
       $this->index($path_segments);
     }
   }
-  
+ 
+ // Static methods
+ private static $blacklisted_controllers = array();
+ 
+ public static function Blacklist() {
+   foreach (func_get_args() as $controller) {
+    self::$blacklisted_controllers[] = $controller;
+   }
+ }
+ 
+ public static function IsAllowed($controller) {
+   return !in_array($controller, self::$blacklisted_controllers);
+ }
 }
 class DB {
   
@@ -1214,22 +1279,27 @@ if(!isset($shortstack_config)) {
     ),
     'views' => array(
       'folder' => 'views',
-      'cache' => 'caches',
       'force_short_tags'=>false,
     ),
     'controllers' => array(
       'folder' => 'controllers',
+      'index' => 'home',
       '404_handler'=>'home',
     ),
     'helpers' => array(
       'folder' => 'helpers',
       'autoload'=> array(),
     ),
+    'cacheing' => array(
+      'folder' => 'caches',
+      'enabled' => true,
+    ),
   );
 }
 
 if( isset($shortstack_config) ) {
   define('FORCESHORTTAGS', @$shortstack_config['views']['force_short_tags']);
+  define('USECACHE', @$shortstack_config['cacheing']['enabled']);
   if(@ is_array($shortstack_config['helpers']['autoload']) ) {
     foreach($shortstack_config['helpers']['autoload'] as $helper) {
       require_once( ShortStack::HelperPath($helper."_helper"));

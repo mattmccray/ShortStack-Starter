@@ -24,4 +24,9 @@ class InstallController extends BaseController {
     }
   }
   
+  function clear_cache($args=array()) {
+    Cache::Clear();
+    throw new FullRedirect( url_for('home') );
+  }
+  
 }

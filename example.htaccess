@@ -1,5 +1,6 @@
 Options -Indexes
 
+# php_flag display_errors on # For DEV
 php_flag display_errors off
 
 # Turn on URL rewriting
@@ -19,4 +20,4 @@ RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 
 # Rewrite all other URLs to index.php/URL
-RewriteRule ^(.*)$ /index.php/$1 [PT,L]
+RewriteRule ^(.*)$ /index.php?$1 [PT,L]

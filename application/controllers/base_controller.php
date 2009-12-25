@@ -19,6 +19,7 @@ class BaseController extends Controller {
   
   protected function renderThemeText($text, $params=array(), $wrapInLayout=null) {
     $layoutView = ($wrapInLayout == null) ? $this->defaultLayout : $wrapInLayout;
+    $content = "";
     if($layoutView !== false) {
       $layout_file = App::ThemeTemplatePath($layoutView);
       $params = $this->defaultData($params);
@@ -27,10 +28,12 @@ class BaseController extends Controller {
       else
         $layout = new Template( ShortStack::ViewPath($layoutView) );
       $layout->contentForLayout = $text;
-      $layout->display($params);
+      $content = $layout->fetch($params);
     } else {
-      echo $content;
+      $content = $text;
     }
+    $this->_cacheContent($content);
+    echo $content;
   }
   
   protected function defaultData($params=array()) {

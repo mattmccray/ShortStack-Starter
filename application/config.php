@@ -13,9 +13,9 @@ $config['site'] = array(
   'timezone'=> 'America/Chicago'
 );
 
-// ==========================
-// = Admin user information =
-// ==========================
+// ===========================
+// = Default Admin user info =
+// ===========================
 $config['admin'] = array(
   'username' => 'admin',
   'password' => 'admin'
@@ -37,16 +37,20 @@ $config['shortstack'] = array(
   ),
   'views' => array(
     'folder' => 'application/views',
-    'cache' => 'application/data/cache',
     'force_short_tags'=>false,
   ),
   'controllers' => array(
     'folder' => 'application/controllers',
     '404_handler'=>'home',
+    'index'=>'home',
   ),
   'helpers' => array(
     'folder' => 'application/helpers',
     'autoload'=> array('theme'),
+  ),
+  'cacheing' => array(
+    'folder' => 'application/data/cache',
+    'enabled' => true,
   ),
 );
 
