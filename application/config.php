@@ -41,7 +41,7 @@ $config['shortstack'] = array(
   ),
   'controllers' => array(
     'folder' => 'application/controllers',
-    '404_handler'=>'home',
+    '404_handler'=>'missing',
     'index'=>'home',
   ),
   'helpers' => array(
@@ -50,7 +50,8 @@ $config['shortstack'] = array(
   ),
   'cacheing' => array(
     'folder' => 'application/data/cache',
-    'enabled' => true,
+    'enabled' => false,
+    'expires' => 60, // Seconds...
   ),
 );
 
